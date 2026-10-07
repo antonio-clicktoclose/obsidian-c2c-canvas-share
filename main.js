@@ -26,6 +26,16 @@ function stripFrontmatter(text) {
   return text.replace(/^---\n[\s\S]*?\n---\n?/, "");
 }
 
+// Local images referenced in markdown: ![[file.png]] and ![alt](file.png).
+function embeddedImages(text) {
+  const wiki = [...text.matchAll(/!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g)].map((m) => m[1]);
+  const markdown = [...text.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)]
+    .map((m) => m[1])
+    .filter((src) => !/^(https?:|data:)/.test(src))
+    .map((src) => decodeURIComponent(src));
+  return [...wiki, ...markdown];
+}
+
 // Large photos are re-encoded so each upload stays under the server's request limit.
 async function shrinkIfLarge(buffer, ext) {
   if (ext === "svg" || ext === "gif" || buffer.byteLength <= MAX_IMAGE_BYTES) return { buffer, ext };
@@ -138,8 +148,18 @@ module.exports = class CanvasSharePlugin extends Plugin {
         else skipped.push(image.name);
       };
 
-      const fileNodes = (canvas.nodes || []).filter((n) => n.type === "file" && n.file);
+      // Images placed inside text cards.
+      const textImages = (canvas.nodes || [])
+        .filter((n) => n.type === "text" && n.text)
+        .flatMap((n) => embeddedImages(n.text));
       let done = 0;
+      for (const target of textImages) {
+        status.setMessage(`C2C Canvas Share: uploading image ${++done} of ${textImages.length}…`);
+        await addImage(target, file.path);
+      }
+
+      const fileNodes = (canvas.nodes || []).filter((n) => n.type === "file" && n.file);
+      done = 0;
       for (const node of fileNodes) {
         status.setMessage(`C2C Canvas Share: uploading ${++done} of ${fileNodes.length}…`);
         const target = this.resolveFile(node.file, file.path);
@@ -151,8 +171,8 @@ module.exports = class CanvasSharePlugin extends Plugin {
           const text = stripFrontmatter(await this.app.vault.read(target));
           files[node.file] = text;
           // Images embedded inside the note travel with it.
-          for (const match of text.matchAll(/!\[\[([^\]|#]+)(?:[|#][^\]]*)?\]\]/g)) {
-            await addImage(match[1], target.path);
+          for (const image of embeddedImages(text)) {
+            await addImage(image, target.path);
           }
         } else {
           skipped.push(target.name);
