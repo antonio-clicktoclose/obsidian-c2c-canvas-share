@@ -1,0 +1,9 @@
+{
+  "id": "c2c-canvas-share",
+  "name": "C2C Canvas Share",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Share a canvas as a read-only web page with one click. Adds Share canvas on the web to the canvas menu.",
+  "author": "ClickToClose",
+  "isDesktopOnly": false
+}
